@@ -1,6 +1,9 @@
 # Molecular-generative-model-based-on-conditional-variational-autoencoder-for-de-novo-molecular-design
 github for "Molecular generative model based on conditional variational autoencoder for de novo molecular design"
 
+https://jcheminf.biomedcentral.com/articles/10.1186/s13321-018-0286-7
+https://arxiv.org/abs/1806.05805
+
 1. Fisrt, you need to prepare file containing smiles. each line of the file is smiles of a molecule (please see smiles.txt in this repo)
 2. Calculate properties of molecules using following command
 ```
