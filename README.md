@@ -11,7 +11,7 @@ python cal_prop.py --input_filename=smiles.txt --output_filename=smiles_prop.txt
 python -u train.py --prop_file=smiles_prop.txt --save_dir=./save
 ```
 4. After trining a model, you can generate molecules with desirable properties. Suppose you want to generate molecules whoe MW=300, LogP=4, and TPSA=100, then the command is following:
-'''
+```
 python sample.py --prop_file=smiles_prop.txt --save_file=save/model_3.ckpt-3 --target_prop='300 4 100' --result_filename=result.txt
-'''
+```
 The result will be written in result.txt
