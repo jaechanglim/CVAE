@@ -6,30 +6,32 @@ import threading
 class CVAE():
     def __init__(self,
                  vocab_size,
-                 batch_size=20,
-                 latent_size=100,
-                 stddev = 1.0,
-                 mean = 0.0,
-                 num_prop = 5
+                 args
                   ):
 
         self.vocab_size = vocab_size
-        self.batch_size = batch_size
-        self.latent_size = latent_size
-        self.num_prop = num_prop
-        self.stddev = stddev
-        self.mean = mean
+        self.batch_size = args.batch_size
+        self.latent_size = args.latent_size
+        self.lr = tf.Variable(args.lr, trainable=False)
+        self.num_prop = args.num_prop
+        self.stddev = args.stddev
+        self.mean = args.mean
+        self.unit_size = args.unit_size
+        self.n_rnn_layer = args.n_rnn_layer
+        
         self._create_network()
+
 
     def _create_network(self):
         self.X = tf.placeholder(tf.int32, [self.batch_size, None])
+        self.Y = tf.placeholder(tf.int32, [self.batch_size, None])
         self.C = tf.placeholder(tf.float32, [self.batch_size, self.num_prop])
         self.L = tf.placeholder(tf.int32, [self.batch_size])
         
-        self.unit_size = 500
+
         
-        decoded_rnn_size = [self.unit_size, self.unit_size, self.unit_size]
-        encoded_rnn_size = [self.unit_size, self.unit_size, self.unit_size]
+        decoded_rnn_size = [self.unit_size for i in range(self.n_rnn_layer)]
+        encoded_rnn_size = [self.unit_size for i in range(self.n_rnn_layer)]
         
         with tf.variable_scope('decode'):
             decode_cell=[]
@@ -70,11 +72,11 @@ class CVAE():
         weights = tf.cast(weights, tf.int32)
         weights = tf.cast(weights, tf.float32)
         self.reconstr_loss = tf.reduce_mean(tf.contrib.seq2seq.sequence_loss(
-            logits=decoded_logits, targets=self.X, weights=weights))
+            logits=decoded_logits, targets=self.Y, weights=weights))
         self.latent_loss = self.cal_latent_loss(self.mean, self.log_sigma)
 
         # Loss
-        self.lr = tf.Variable(0.0, trainable=False)
+
         self.loss = self.latent_loss + self.reconstr_loss 
         #self.loss = self.reconstr_loss 
         optimizer    = tf.train.AdamOptimizer(self.lr)
@@ -97,22 +99,23 @@ class CVAE():
         inp = tf.concat([X, C], axis=-1)
         _, state = tf.nn.dynamic_rnn(self.encoder, inp, dtype=tf.float32, scope = 'encode', sequence_length = self.L)
         c,h = state[-1]
-        self.weights['out_mean'] = tf.reshape(self.weights['out_mean'], [500, -1])
-        self.weights['out_log_sigma'] = tf.reshape(self.weights['out_log_sigma'], [500, -1])
+        self.weights['out_mean'] = tf.reshape(self.weights['out_mean'], [self.unit_size, -1])
+        self.weights['out_log_sigma'] = tf.reshape(self.weights['out_log_sigma'], [self.unit_size, -1])
         mean = tf.matmul(h, self.weights['out_mean'])+self.biases['out_mean']
         log_sigma = tf.matmul(h, self.weights['out_log_sigma'])+self.biases['out_log_sigma']
         retval = mean+tf.exp(log_sigma/2.0)*self.eps['eps']
         return retval, mean, log_sigma
 
     def decode(self, Z):
-        seq_length = tf.shape(self.X)[1]
+        seq_length=tf.shape(self.X)[1]
         new_Z = tf.tile(tf.expand_dims(Z, 1), [1, seq_length, 1])
         C = tf.expand_dims(self.C, 1)
         C = tf.tile(C, [1, tf.shape(self.X)[1], 1])
-        inputs = tf.concat([new_Z, C], axis=-1)
-        #state = tuple([tf.contrib.rnn.LSTMStateTuple(Z, tf.zeros((self.batch_size, self.unit_size)))])
-
-        Y, _ = tf.nn.dynamic_rnn(self.decoder, inputs, dtype=tf.float32, scope = 'decode', sequence_length = self.L)
+        X = tf.nn.embedding_lookup(self.embedding_encode, self.X)
+        inputs = tf.concat([new_Z, X, C], axis=-1)
+        self.initial_decoded_state = tuple([tf.contrib.rnn.LSTMStateTuple(tf.zeros((self.batch_size, self.unit_size)), tf.zeros((self.batch_size, self.unit_size))) for i in range(3)])
+        #self.initial_decoded_state=self.decoder.zero_state() 
+        Y, self.output_decoded_state = tf.nn.dynamic_rnn(self.decoder, inputs, dtype=tf.float32, scope = 'decode', sequence_length = self.L, initial_state=self.initial_decoded_state)
         Y = tf.reshape(Y, [self.batch_size*seq_length, -1])
         Y = tf.matmul(Y, self.weights['softmax'])+self.biases['softmax']
         Y_logits = tf.reshape(Y, [self.batch_size, seq_length, -1])
@@ -136,12 +139,22 @@ class CVAE():
         latent_loss = tf.reduce_mean(-0.5*(1+log_sigma-tf.square(mean)-tf.exp(log_sigma)))
         return latent_loss
     
-    def train(self, x, l, c):
-        _, r_loss, l_loss = self.sess.run([self.opt, self.reconstr_loss, self.latent_loss], feed_dict = {self.X :x, self.L : l, self.C : c})
+    def train(self, x, y, l, c):
+        _, r_loss, l_loss = self.sess.run([self.opt, self.reconstr_loss, self.latent_loss], feed_dict = {self.X :x, self.Y:y, self.L : l, self.C : c})
         return r_loss + l_loss
-    def test(self, x, l, c):
-        mol_pred, r_loss, l_loss  = self.sess.run([self.mol_pred, self.reconstr_loss, self.latent_loss], feed_dict = {self.X :x, self.L : l, self.C : c})
+    
+    def test(self, x, y, l, c):
+        mol_pred, r_loss, l_loss  = self.sess.run([self.mol_pred, self.reconstr_loss, self.latent_loss], feed_dict = {self.X :x, self.Y:y, self.L : l, self.C : c})
         return r_loss + l_loss
 
-
-
+    def sample(self, latent_vector, c, start_codon, seq_length):
+        l = np.ones((self.batch_size)).astype(np.int32)
+        x=start_codon
+        preds = []
+        for i in range(seq_length):
+            if i==0:
+                x, state = self.sess.run([self.mol_pred, self.output_decoded_state], feed_dict = {self.X:x, self.latent_vector:latent_vector, self.L : l, self.C : c})
+            else:
+                x, state = self.sess.run([self.mol_pred, self.output_decoded_state], feed_dict = {self.X:x, self.latent_vector:latent_vector, self.L : l, self.C : c, self.initial_decoded_state:state})
+            preds.append(x)
+        return np.concatenate(preds,1).astype(int).squeeze()
