@@ -1,4 +1,5 @@
-# Molecular-generative-model-based-on-conditional-variational-autoencoder-for-de-novo-molecular-design
+![Screenshot](figure.png)
+
 github for "Molecular generative model based on conditional variational autoencoder for de novo molecular design"
 
 https://jcheminf.biomedcentral.com/articles/10.1186/s13321-018-0286-7
