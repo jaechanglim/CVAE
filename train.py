@@ -22,6 +22,7 @@ parser.add_argument('--save_dir', help='save dir', type=str, default='save/')
 args = parser.parse_args()
 
 print (args)
+print("Num GPUs Available: ", len(tf.compat.v1.config.list_physical_devices('GPU')))
 #convert smiles to numpy array
 molecules_input, molecules_output, char, vocab, labels, length = load_data(args.prop_file, args.seq_length)
 vocab_size = len(char)
@@ -47,7 +48,7 @@ test_length = length[num_train_data:-1]
 model = CVAE(vocab_size,
              args
              )
-print ('Number of parameters : ', np.sum([np.prod(v.shape) for v in tf.trainable_variables()]))
+print ('Number of parameters : ', np.sum([np.prod(v.shape) for v in tf.compat.v1.trainable_variables()]))
 
 for epoch in range(args.num_epochs):
 
@@ -57,7 +58,6 @@ for epoch in range(args.num_epochs):
     train_loss = []
     test_loss = []
     st = time.time()
-    
     for iteration in range(len(train_molecules_input)//args.batch_size):
         n = np.random.randint(len(train_molecules_input), size = args.batch_size)
         x = np.array([train_molecules_input[i] for i in n])

@@ -36,7 +36,7 @@ model = CVAE(vocab_size,
              )
 model.restore(args.save_file)
 
-print ('Number of parameters : ', np.sum([np.prod(v.shape) for v in tf.trainable_variables()]))
+print ('Number of parameters : ', np.sum([np.prod(v.shape) for v in tf.compat.v1.trainable_variables()]))
 
 #target property to numpy array
 target_prop = np.array([[float(p) for p in args.target_prop.split()] for _ in range(args.batch_size)])
